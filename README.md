@@ -105,7 +105,7 @@ To penalize the larger relative error in the short deliveries, I decided to use 
 The relative errors at short deliveries still are not satisfactory, as well as the overall performance. Hence I used the method of over-sampling on the short deliveries (`delivery_time` < 2000) to boost up the weight on the short deliveries. A pipeline were built to process the data before feeding to train the model. Surprisingly, the performance of using standard RMSE to train the model after resampling is better than using the relative error score at k = -0.5, both plain train-val-test split and k-fold cv.
 
 ## Final Model
-The final model chosen was the standard LGBRegressor trained on the resampled data. Average relative error on the test set was 0.09.
+The final model chosen was the standard LGBRegressor trained on the resampled data. Average relative error on the test set was 0.11.
 
 
 
