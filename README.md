@@ -61,19 +61,20 @@ Data columns (total 16 columns):
 A new feature `created_hours` were created to replace the `created_at` feature to just extract the hour in the day, while the target value `delivery_time` was extracted from the time difference between `created_at` and `actual_delivery_time`.
 
 ### Features distribution
-![image](https://github.com/ReadingHui/doordash-delivery-prediction/assets/146915098/00a238a4-5318-4709-a2a9-ae39ef18b923)
+![image](https://github.com/user-attachments/assets/561e38cf-ee75-4d47-8eb9-4d19f4f99748)
 
 ### Target distribution
-![image](https://github.com/ReadingHui/doordash-delivery-prediction/assets/146915098/14595904-5c98-4a7e-a850-0f09d3f2ef37)
+![image](https://github.com/user-attachments/assets/2852c4fe-aa39-4a4f-b24c-6b89d4d11dd4)
+
 
 ## Data Cleaning (Missing Values)
 
 ### Filling missing values
 Various techniques were used to fill the `NaN` values as much as possible.
 1. `market_id`  
-   984 missing values were filled in by using the corresponding `market_id` of the same `store_id`. There are still 3 data missing.
+   984 missing values were filled in by using the latest corresponding `market_id` of the same `store_id`. There are still 3 data missing.
 2. `store_primary_category`  
-   154 missing values were filled in by using the corresponding `market_id` of the same `store_id`. There are still 4606 data missing.
+   154 missing values were filled in by using the latest corresponding `store_primary_category` of the same `store_id`. There are still 4606 data missing.
 3. Market features - number of dasher  
   All the missing values were common across all 3 features. The data were first filled by the median from the closest hour with data of the same `store_id`, then the median from the closest hour with data of the same `market_id`. There were 120 and 12 data being filled respectivly, leaving 16130 data missing afterwards.
 4. `estimated_store_to_consumer_driving_duration`  
@@ -86,26 +87,22 @@ There are still 7 data with no `actual_delivery_time`, hence no target values ca
 As there are quite a number of missing values and being a mostly numeric tabular dataset, LightGBM were chosen to predict the target.
 
 ### 1. Base Model
-An LGBRegressor model was being chosen as the base model, the training and validation score were 960 and 1029 respectively, while the test score was 1018. Upon plotting the feature importance, `store_id` was the most important feature, followed by `created_hours`, `estimated_store_to_consumer_driving_duration` and `subtotal`, which is as expected as `store_id` gives the geographic information, `created_hours` relating to traffic condition, `estimated_store_to_consumer_driving_duration` provides time duration of just the delivery part and `subtotal` affects the tips of the Dashers' tips (income).  
-![image](https://github.com/ReadingHui/doordash-delivery-prediction/assets/146915098/e5138f6a-c8e0-48ac-acd5-15e0a9370b43)
+An LGBMRegressor model was being chosen as the base model, the training and validation score were 903 and 973 respectively, while the test score was 963. Upon plotting the feature importance, `store_id` was the most important feature, followed by `total_outstanding_orders`, `total_onshift_dashers` and `estimated_store_to_consumer_driving_duration`, which is as expected as `store_id` gives the geographic information, `total_outstanding_orders` gives approximated waiting time, `total_onshift_dashers` provides time needed for a dasher to pick up the order and `estimated_store_to_consumer_driving_duration` affects the travelling time from store to customer.  
+![image](https://github.com/user-attachments/assets/3c7039b9-5bc3-4a60-8a25-7c09e1fb32fe)
 
-The error was concentrated, but I found Root Mean Squared Error (RMSE) may not be the most suitable candidate to evaluate the model performance as 900s error in a 10 mins delivery and 60 mins delivery has a very different meaning. Hence a relative error was then chosen to evaluate the models in a more accurate way.  
-![image](https://github.com/ReadingHui/doordash-delivery-prediction/assets/146915098/a4679ccf-f724-450e-9df5-cc9db9167a1d)
+In error analysis, we can see that there are some outliers in the delivery time that contributes to some very high error as shown below, so it is natural to try and remove the outliers before training to see if it would improve the model.
+![image](https://github.com/user-attachments/assets/4fead070-8d10-4297-bac5-795d808aa787)
+
 
 ### 2. Base Model (removing outliers)
-From analysing the relative error distribution in the first model, we see the model does not preforms well in short deliveries, which is kind of expected as the fluctuation will be larger for shorter delivery time. I suspect the outliers (unusually long delivery time) may have affected the performance of the model, so I removed the outliers (z-score > 2) and re-trained the model, the scores for training set and validation set improved but the scores for test sets are the same, so it is not very useful.  
-![image](https://github.com/ReadingHui/doordash-delivery-prediction/assets/146915098/f856e7f7-3fdd-4733-bed8-179a88edf1df)
+I removed the outliers (z-score > 2) and re-trained the model, the scores for training set and validation set massively improved to 644 and 694, but the scores for test sets is still 975, which is even worse than keeping the outliers, so it is not very useful.  
+![image](https://github.com/user-attachments/assets/b13176d2-9d9d-4417-9762-79e7c49f0571)
 
-
-### 3. Custom loss function (Relative error loss)
-To penalize the larger relative error in the short deliveries, I decided to use the relative rmse loss function to train the model instead. I included the division of `y_true` in the loss function, first one squared, second one didn't to try different degree of panalties. It appears the second penalty was much stronger as the relative error of the training and validation sets drops significantly to ~0.16, which led me to try out more different loss function, by changing the exponent of `y_true` in the denominator. I basically ran a grid search on the parameter, and when the exponent was -0.5 the performance seems to be the best.  
-![image](https://github.com/ReadingHui/doordash-delivery-prediction/assets/146915098/f7c2e17e-d6df-47ca-8bf3-e20f977f2e4c)
-
-### 4. Further tackling error at short deliveries
-The relative errors at short deliveries still are not satisfactory, as well as the overall performance. Hence I used the method of over-sampling on the short deliveries (`delivery_time` < 2000) to boost up the weight on the short deliveries. A pipeline were built to process the data before feeding to train the model. Surprisingly, the performance of using standard RMSE to train the model after resampling is better than using the relative error score at k = -0.5, both plain train-val-test split and k-fold cv.
+### 3. k-fold Bayesian CV for hyperparameter tuning
+With the analysis above, we perform 10-fold Bayesian CV on the model to search for the best hyperparameter. The final hyperparameters can be found in the "doordash_delivery_prediction_lgbm" notebook, the RMSE for the training set iss 915 while that of the test set is 956, which is a bit of improvement comparing to the base model.
 
 ## Final Model
-The final model chosen was the standard LGBRegressor trained on the resampled data. Average relative error on the test set was 0.0921.
+The final model chosen was the LGBMRegressor with tuned hyperparameter. Average RMSE is 956.
 
 
 
