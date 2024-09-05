@@ -2,9 +2,12 @@ import pandas as pd
 import numpy as np
 import config
 import json
+import os
 
 from sklearn.base import TransformerMixin
 from sklearn.pipeline import Pipeline
+
+CUR_PATH = os.path.dirname(__file__)
 
 class preprocess:
     def datetimes(X: pd.DataFrame) -> pd.DataFrame:
@@ -29,7 +32,7 @@ class imputers:
             self.store_to_market = {}
 
         def fit(self, X, y=None):
-            with open(config.STORE_TO_MARKET) as json_file:
+            with open(CUR_PATH + config.STORE_TO_MARKET) as json_file:
                 self.store_to_market = json.load(json_file)
             return self
 
@@ -44,7 +47,7 @@ class imputers:
             self.store_to_primary = {}
 
         def fit(self, X, y=None):
-            with open(config.STORE_TO_PRIMARY) as json_file:
+            with open(CUR_PATH + config.STORE_TO_PRIMARY) as json_file:
                 self.store_to_primary = json.load(json_file)
             return self
 
@@ -59,7 +62,7 @@ class encoders:
             self.store_primary_encode = {}
         
         def fit(self, X, y=None):
-            with open(config.STORE_PRIMARY_ENCODE) as json_file:
+            with open(CUR_PATH + config.STORE_PRIMARY_ENCODE) as json_file:
                 self.store_primary_encode = json.load(json_file)
             return self
         

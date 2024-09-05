@@ -1,5 +1,5 @@
-TEST_FILE = 'datasets/test.csv'
-MODEL_FILE = 'model_predictions/lgb_with_bayesCV.txt'
+TEST_FILE = '\datasets\\test.csv'
+MODEL_FILE = '\model_predictions\\lgb_with_bayesCV.txt'
 TARGET = 'delivery_time'
 FEATURES = ['market_id',
  'store_id',
@@ -16,6 +16,6 @@ FEATURES = ['market_id',
  'estimated_order_place_duration',
  'estimated_store_to_consumer_driving_duration',
  'created_hours']
-STORE_TO_MARKET = 'EDA/store_to_market.json'
-STORE_TO_PRIMARY = 'EDA/store_to_primary.json'
-STORE_PRIMARY_ENCODE = 'model_building/store_primary_category_encode.json'
+STORE_TO_MARKET = '\EDA\store_to_market.json'
+STORE_TO_PRIMARY = '\EDA\store_to_primary.json'
+STORE_PRIMARY_ENCODE = '\model_building\store_primary_category_encode.json'
