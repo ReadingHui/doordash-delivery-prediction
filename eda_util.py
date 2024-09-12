@@ -5,23 +5,22 @@ import matplotlib.pyplot as plt
 
 from sklearn.base import BaseEstimator, TransformerMixin
 
-def data_summary(df:pd.DataFrame, index_col=None, target=None, verbose=True) -> dict:
+def data_summary(df:pd.DataFrame, index_col: list[str] = None, target: str = None, verbose: bool = True) -> dict:
     df = df.copy()
     if index_col:
         df = df.drop(index_col, axis=1)
     if target:
-        y = df[target]
         df = df.drop(target, axis=1)
     num_col = df.select_dtypes(include='number').columns.to_list()
     cat_col = df.select_dtypes(include='category').columns.to_list()
     misc_col = [c for c in df.columns if ((c not in num_col) and (c not in cat_col))]
-    has_na_col = df.columns[df.isnull().any()].to_list()
+    col_with_nan = df.columns[df.isnull().any()].to_list()
     info = {
         'num_col': num_col,
         'cat_col': cat_col,
         'misc_col': misc_col,
-        'has_na_col': has_na_col,
-        'na_col': pd.Series({feature: df[feature].isnull().sum() for feature in has_na_col}).to_frame(name='na_values_count')
+        'col_with_nan': col_with_nan,
+        'na_count': pd.Series({feature: df[feature].isnull().sum() for feature in col_with_nan}).to_frame(name='na_values_count')
     }
 
     if verbose:    
@@ -34,9 +33,9 @@ def data_summary(df:pd.DataFrame, index_col=None, target=None, verbose=True) -> 
         else:
             print('No potential categorical feature')
         if misc_col:
-            print(f'Miscellenous features are: ')
-        if has_na_col:
-            print(f'Columns with missing values are: {has_na_col}')
+            print(f'Miscellenous features are: {misc_col}')
+        if col_with_nan:
+            print(f'Columns with missing values are: {col_with_nan}')
         else:
             print(f'There is no missing value')
     
@@ -44,18 +43,15 @@ def data_summary(df:pd.DataFrame, index_col=None, target=None, verbose=True) -> 
 
     return info
 
-class feature_target:
-    def feature_target_split(df: pd.DataFrame, target: str, col_drop=[]):
+class FeatureTarget:
+    def feature_target_split(df: pd.DataFrame, target: str, col_drop: list[str] = []):
         y = df[target]
         mask = col_drop + [target]
-        if col_drop:
-            X = df.drop(columns=mask, axis=1)
-        else:
-            X = df.drop(columns=target, axis=1)
+        X = df.drop(columns=mask, axis=1)
         return X, y
 
-class plots:
-    def distributionPlots(df:pd.DataFrame, rotate=False) -> None:
+class Plots:
+    def distribution_plots(df:pd.DataFrame, rotate: bool = False) -> None:
         # Set the Seaborn style
         sns.set(style="whitegrid")
 
@@ -68,23 +64,26 @@ class plots:
         # Iterate through the numerical features and create the density plots
         for i, feature_name in enumerate(df.columns):
             row_idx, col_idx = divmod(i, cols)  # Calculate the current row and column index
+            cur_axes = axes[row_idx, col_idx]
+            first_30 = df.dropna(subset=feature_name)[feature_name].value_counts()  # Count the appearances
+            first_30 = first_30.iloc[:30].index.sort_values()   # Take the highest 30 and sort by index value
             if df[feature_name].dtype in [np.int32, np.int64, pd.Int64Dtype()] or pd.api.types.is_object_dtype(df[feature_name]):
                 if len(df[feature_name].unique()) < 30:
-                    sns.countplot(df.dropna(subset=feature_name), x=feature_name, ax=axes[row_idx, col_idx], color='darkcyan')
-                    axes[row_idx, col_idx].set_title(f'Count Plot of {feature_name}')
+                    sns.countplot(df.dropna(subset=feature_name), x=feature_name, ax=cur_axes, color='darkcyan')
+                    cur_axes.set_title(f'Count Plot of {feature_name}')
                 else:
-                    sns.countplot(df.dropna(subset=feature_name), x=feature_name, ax=axes[row_idx, col_idx], color='darkcyan', order=df.dropna(subset=feature_name)[feature_name].value_counts().iloc[:30].index.sort_values())
-                    axes[row_idx, col_idx].set_title(f'Count Plot of {feature_name} (Top 30)')
-                axes[row_idx, col_idx].set_xlabel(feature_name)
-                axes[row_idx, col_idx].set_ylabel('Count')
-                axes[row_idx, col_idx].bar_label(axes[row_idx, col_idx].containers[0])
+                    sns.countplot(df.dropna(subset=feature_name), x=feature_name, ax=cur_axes, color='darkcyan', order=first_30)
+                    cur_axes.set_title(f'Count Plot of {feature_name} (Top 30)')
+                cur_axes.set_xlabel(feature_name)
+                cur_axes.set_ylabel('Count')
+                cur_axes.bar_label(cur_axes.containers[0])
             else:
-                sns.histplot(df.dropna(subset=feature_name), x=feature_name, kde=True, ax=axes[row_idx, col_idx])
-                axes[row_idx, col_idx].set_title(f'Density Plot of {feature_name}')
-                axes[row_idx, col_idx].set_xlabel(feature_name)
-                axes[row_idx, col_idx].set_ylabel('Density')
+                sns.histplot(df.dropna(subset=feature_name), x=feature_name, kde=True, ax=cur_axes)
+                cur_axes.set_title(f'Density Plot of {feature_name}')
+                cur_axes.set_xlabel(feature_name)
+                cur_axes.set_ylabel('Density')
             if rotate == True or (type(rotate) == list and feature_name in rotate):
-                axes[row_idx, col_idx].tick_params(axis='x', rotation=270)
+                cur_axes.tick_params(axis='x', rotation=270)
         # Adjust the spacing between subplots
         plt.tight_layout()
 
@@ -92,15 +91,15 @@ class plots:
 
         plt.show()
 
-class correlations:
-    def featuresCorr(df: pd.DataFrame, num_features: list) -> None:
+class Correlations:
+    def features_corr(df: pd.DataFrame, num_features: list[str]) -> None:
         df = df[num_features]
         cmap = sns.color_palette("light:b", as_cmap=True)
         sns.heatmap(df.corr().abs(), cmap=cmap,
                 square=True, linewidths=.5, annot=True)
         plt.show()
 
-    def catTargetCorr(data:pd.DataFrame, target: str) -> None:
+    def cat_target_corr(data:pd.DataFrame, target: str) -> None:
         df = data.drop(target, axis=1)
         num_features = df.columns[(df.dtypes == 'int64') | (df.dtypes == 'float64')].to_list()
         cat_features = df.columns[df.dtypes == 'object'].to_list()
@@ -118,17 +117,18 @@ class correlations:
         # Iterate through the numerical features and create the density plots
         for i, feature_name in enumerate(features):
             row_idx, col_idx = divmod(i, cols)  # Calculate the current row and column index
+            cur_axes = axes[row_idx, col_idx]
             if feature_name in num_features:
-                sns.histplot(data=data, x=feature_name, hue=target, kde=True, multiple='stack', ax=axes[row_idx, col_idx])
-                axes[row_idx, col_idx].set_title(f'Distribution Plot of {feature_name} subject to {target}')
-                axes[row_idx, col_idx].set_xlabel(feature_name)
-                axes[row_idx, col_idx].set_ylabel('Density')
+                sns.histplot(data=data, x=feature_name, hue=target, kde=True, multiple='stack', ax=cur_axes)
+                cur_axes.set_title(f'Distribution Plot of {feature_name} subject to {target}')
+                cur_axes.set_xlabel(feature_name)
+                cur_axes.set_ylabel('Density')
             elif feature_name in cat_features:
-                sns.countplot(data=data, x=feature_name, hue=target, ax=axes[row_idx, col_idx])
-                axes[row_idx, col_idx].set_title(f'Count Plot of {feature_name} subject to {target}')
-                axes[row_idx, col_idx].set_xlabel(feature_name)
-                axes[row_idx, col_idx].set_ylabel('Count')
-                axes[row_idx, col_idx].bar_label(axes[row_idx, col_idx].containers[0])
+                sns.countplot(data=data, x=feature_name, hue=target, ax=cur_axes)
+                cur_axes.set_title(f'Count Plot of {feature_name} subject to {target}')
+                cur_axes.set_xlabel(feature_name)
+                cur_axes.set_ylabel('Count')
+                cur_axes.bar_label(cur_axes.containers[0])
         # Adjust the spacing between subplots
         plt.tight_layout()
 
@@ -174,8 +174,10 @@ class ColumnTransformers:
             for col in self.float_to_int:
                 if X[col].dtype not in ['float32', 'float64']:
                     float_err.append(col)
-            if len(int_err) + len(float_err) > 0:
-                raise TypeError(f'Columns {int_err} are not integer dtype.\n Columns {float_err} are not float dtype.')        
+            if len(int_err) > 0:
+                raise TypeError(f'Columns {int_err} are not integer dtype.')
+            if len(float_err) > 0:
+                raise TypeError(f'Columns {float_err} are not float dtype.')
             return self
         
         def transform(self, X, y=None):
